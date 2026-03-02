@@ -137,7 +137,7 @@
 
 #include "icons.h"
 #include "meshcore_logo_color.h"
-#include "mesh_touch_splash.h"
+#include "touch_splash.h"
 
 // 16x16 tactical icons
 static const uint8_t icon_home_16[] = { 0x00,0x00,0x80,0x01,0xc0,0x03,0xe0,0x07,0x70,0x0e,0x38,0x1c,0xfc,0x3f,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0xf8,0x1f,0x00,0x00,0x00,0x00,0x00,0x00 };
@@ -189,14 +189,9 @@ class SplashScreen : public UIScreen {
       else if (progress > 0.5f) textC = DisplayDriver::SLATE_GREY;
       else if (progress > 0.2f) textC = DisplayDriver::DARK_GREY;
 
-      // 80% centered splash
+      // Full-screen native 320x240 splash
       if (progress > 0.1f) {
-        display.drawRGBBitmapScaled(sw / 2 - (mesh_touch_splash_width * 0.8f) / 2, 
-                                   sh / 2 - (mesh_touch_splash_height * 0.8f) / 2, 
-                                   mesh_touch_splash, 
-                                   mesh_touch_splash_width, 
-                                   mesh_touch_splash_height, 
-                                   0.8f);
+        display.drawRGBBitmap(0, 0, touch_splash, touch_splash_width, touch_splash_height);
       }
 
       display.setColor(DisplayDriver::DARK);
@@ -1371,6 +1366,7 @@ public:
        _active_chat_idx(0), _active_chat_is_group(true), _keyboard_visible(false), _kb_shift(0), _chat_scroll(0), _chat_dropdown_open(false),
        _dropdown_scroll(0), _dropdown_drag_y(-1),
        _radio_raw_mode(false),
+       _editing_node_name(false),
        _power_armed(false), _power_armed_until(0),
        _msg_unread(false), _chat_unread(false) {
      _chat_draft[0] = 0;
@@ -1568,7 +1564,7 @@ public:
                 } else if (idx == 10) {
                     _num_input_visible = true;
                     _num_input_buf[0] = 0;
-                    _num_input_title = "Set Time (Unix)";
+                    _num_input_title = "Set Time (HH:MM)";
                 } else if (idx == 11) {
                     _num_input_visible = true;
                     _num_input_buf[0] = 0;
@@ -1721,7 +1717,7 @@ public:
         int kw = (_content_w - 20) / 3;
         int kh = (_screen_h - _list_y - 6 - 60) / 4;
         const char* nkeys[12] = {"1","2","3","4","5","6","7","8","9",".","0","X"};
-        if (strcmp(_num_input_title, "Set Time (HH:MM)") == 0) nkeys[9] = ":";
+        if (strstr(_num_input_title, "Set Time") != NULL) nkeys[9] = ":";
         for (int i = 0; i < 12; i++) {
             int kx = _content_x + 10 + (i % 3) * kw;
             int ky = _list_y + 48 + (i / 3) * kh;
@@ -1918,6 +1914,7 @@ public:
       // Input field
       int input_y = _screen_h - 26;
       if (isInRect(x, y, _content_x + 1, input_y - 1, _content_w - 2, 26)) {
+          _editing_node_name = false;
           _keyboard_visible = true;
           return true;
       }
