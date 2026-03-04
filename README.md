@@ -13,11 +13,11 @@ Optimized for the ESP32-S3 with a 320x240 ST7789 TFT and XPT2046 touch controlle
 
 ### ⚡ HOWTO: Quick Start (Flashing)
 If you just want to get up and running quickly:
-1. **Download**: [heltec_v4_tft_touch_v1.2.3_repeats_ble.bin](./bin/heltec_v4_tft_touch_v1.2.3_repeats_ble.bin) (Latest: v1.2.3)
+1. **Download**: [Heltec_v4_2.4inch_touchUI_v1.13.0_v1.2.3.bin](./bin/Heltec_v4_2.4inch_touchUI_v1.13.0_v1.2.3.bin) (Latest: MeshCore v1.13.0 + Touch v1.2.3)
    - Older: [heltec_v4_meshcore_touch.bin](./bin/heltec_v4_meshcore_touch.bin)
 2. **Flash**: Use the [MeshCore Flasher](https://flasher.meshcore.co.uk) (select Custom File) or use `esptool`:
    ```bash
-   esptool.py --chip esp32s3 write_flash 0x10000 bin/heltec_v4_tft_touch_v1.2.3_repeats_ble.bin
+   esptool.py --chip esp32s3 write_flash 0x10000 bin/Heltec_v4_2.4inch_touchUI_v1.13.0_v1.2.3.bin
    ```
 3. **Enjoy**: The device will boot into the premium touch interface!
 
