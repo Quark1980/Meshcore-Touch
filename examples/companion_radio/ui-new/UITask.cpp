@@ -1390,6 +1390,11 @@ private:
     int w = _content_w;
     int panel_h = _screen_h - _list_y - 6;
 
+    if (_keyboard_visible) {
+      renderKeyboard(display);
+      return;
+    }
+
     if (_num_input_visible) {
       renderNumKeypad(display);
       return;
@@ -1772,6 +1777,13 @@ public:
       // Back Button hit area (top-left, enlarged width)
       if (!_is_dashboard && x < 75) {
         _is_dashboard = true;
+        _keyboard_visible = false;
+        _num_input_visible = false;
+        _editing_node_name = false;
+        _chat_dropdown_open = false;
+        _show_msg_detail = false;
+        _chat_draft[0] = 0;
+        _num_input_buf[0] = 0;
         return true;
       }
       // Home Button hit area (Centered Clock in status bar)
@@ -1780,6 +1792,8 @@ public:
         _show_msg_detail = false;
         _keyboard_visible = false;
         _num_input_visible = false;
+        _chat_draft[0] = 0;
+        _num_input_buf[0] = 0;
         return true;
       }
       if (y < _status_bar_h) return true; // Absorb touches in status bar
@@ -1834,6 +1848,7 @@ public:
             the_mesh.savePrefs();
             _editing_node_name = false;
             _keyboard_visible = false;
+            _chat_draft[0] = 0;
             return true;
           }
           if (_chat_draft[0] != 0 && _active_chat_idx != 0xFF) {
@@ -1897,6 +1912,12 @@ public:
           }
         }
         return true; // Absorb all touches in KB area
+      } else {
+        // Tapped outside the keyboard: close the keyboard
+        if (_editing_node_name) _chat_draft[0] = 0;
+        _keyboard_visible = false;
+        _editing_node_name = false;
+        return true;
       }
     }
     if (_num_input_visible) {
