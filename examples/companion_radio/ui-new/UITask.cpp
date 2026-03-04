@@ -25,6 +25,7 @@
 #define AUTO_OFF_MILLIS 15000 // 15 seconds
 #endif
 #define BOOT_SCREEN_MILLIS 3000 // 3 seconds
+#define TOUCH_UI_VERSION   "v1.2.2"
 
 #ifdef PIN_STATUS_LED
 #define LED_ON_MILLIS     20
@@ -233,7 +234,7 @@ public:
     display.setColor(textC);
     display.setTextSize(1);
     char base_info[64];
-    snprintf(base_info, sizeof(base_info), "MeshCore %s  |  Quark1980", _version_info);
+    snprintf(base_info, sizeof(base_info), "MeshCore %s | Touch UI %s", _version_info, TOUCH_UI_VERSION);
     display.drawTextCentered(mid_x, sh - 12, base_info);
 
     if (now_ms >= dismiss_after) {
