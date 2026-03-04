@@ -13,10 +13,11 @@ Optimized for the ESP32-S3 with a 320x240 ST7789 TFT and XPT2046 touch controlle
 
 ### ⚡ HOWTO: Quick Start (Flashing)
 If you just want to get up and running quickly:
-1. **Download**: [heltec_v4_meshcore_touch.bin](./bin/heltec_v4_meshcore_touch.bin)
+1. **Download**: [heltec_v4_tft_touch_v1.2_repeats_ble.bin](./bin/heltec_v4_tft_touch_v1.2_repeats_ble.bin) (Latest: v1.2)
+   - Older: [heltec_v4_meshcore_touch.bin](./bin/heltec_v4_meshcore_touch.bin)
 2. **Flash**: Use the [MeshCore Flasher](https://flasher.meshcore.co.uk) (select Custom File) or use `esptool`:
    ```bash
-   esptool.py --chip esp32s3 write_flash 0x10000 bin/heltec_v4_meshcore_touch.bin
+   esptool.py --chip esp32s3 write_flash 0x10000 bin/heltec_v4_tft_touch_v1.2_repeats_ble.bin
    ```
 3. **Enjoy**: The device will boot into the premium touch interface!
 
@@ -76,7 +77,13 @@ The "TOUCH" edition features a custom-built, high-performance UI designed for a 
 - **Ergonomic Touch Targets**: Enlarged Back buttons and intuitive overlays for easy finger tapping with gloves or in the field.
 - **Tactical Status Bar**: Real-time counters for unread messages (✉) and discovered nodes (⛫), plus accurate battery voltage intel.
 - **Full QWERTY Keyboard**: Compose messages directly on-screen with quick-toggle Shift/Number pads.
+- **Repeats Heard Tracking (NEW)**: Real-time counter (`Me:X`) showing mesh propagation status for sent messages.
+- **BLE Interception (NEW)**: Device chat history stay in sync with activity from external BLE apps (like MeshCore Mobile).
 - **Power Efficiency**: Intelligent backlight management, splash screen auto-dismiss, and optimized redraws.
+
+---
+> [!NOTE]
+> **Experimental Features**: The 'Repeats Heard' and updated BLE logic are currently in testing. While highly functional, please report any edge cases in our community.
 
 ---
 *Created by Quark1980 & The MeshCore Community*
