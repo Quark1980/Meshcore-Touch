@@ -9,7 +9,6 @@
 
 #include <Arduino.h>
 
-
 #ifndef LED_STATE_ON
 #define LED_STATE_ON 1
 #endif
@@ -36,11 +35,13 @@ public:
     uint8_t status;       // 0=pending/none, 1=repeated/acked, 2=failed (optional)
     uint8_t repeat_count; // number of times this message was heard repeated
     uint32_t ack_hash;    // to match with incoming acks
+    uint32_t repeat_id;   // packet hash to match with mesh repeats
   };
   void start();
   void userLedHandler();
   void storeMessage(uint8_t path_len, const char *from_name, const char *text, uint8_t channel_idx = 0xFF,
-                    bool is_group = false, bool is_sent = false, uint32_t ack_hash = 0);
+                    bool is_group = false, bool is_sent = false, uint32_t ack_hash = 0,
+                    uint32_t repeat_id = 0) override;
   void updateMessageAck(uint32_t ack_hash);
 
 private:

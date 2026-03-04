@@ -932,8 +932,8 @@ private:
     display.setColor(DisplayDriver::DARK);
     display.fillRect(x, _list_y, w, panel_h);
 
-    // Top: Channel Selector
-    char ch_name[32] = "Select Channel / Contact";
+    // Top: Channel Selector (Next to Title)
+    char ch_name[32] = "Select Channel";
     if (_active_chat_idx != 0xFF) {
       if (_active_chat_is_group) {
         ChannelDetails ch;
@@ -943,7 +943,13 @@ private:
         if (the_mesh.getContactByIdx(_active_chat_idx, ci)) strcpy(ch_name, ci.name);
       }
     }
-    drawButton(display, x + 4, _list_y + 4, w - 8, 22, ch_name, _chat_dropdown_open);
+
+    // Draw button in header area (shifted left to clear scroll buttons)
+    int btn_w = 120;
+    if (w > 200) btn_w = 140;
+    int btn_x = _screen_w - btn_w - _scroll_btn_w - 6;
+    int btn_y = _status_bar_h + 6;
+    drawButton(display, btn_x, btn_y, btn_w, 22, ch_name, _chat_dropdown_open);
 
     // Bottom: Input Field
     int input_y = _screen_h - 26;
@@ -959,25 +965,31 @@ private:
       display.drawTextLeftAlign(x + 6, input_y + 4, _chat_draft);
     }
 
-    // Middle: History (Filtered)
-    int hist_y = _list_y + 30;
+    // Middle: History
+    int hist_y = _list_y + 4;
     int hist_h = input_y - hist_y - 4;
-    int message_bottom_y = input_y - 4; // Start drawing messages from the bottom of the history area
+    int message_bottom_y = input_y - 4;
 
-    // Step 1: Collect messages to display by working backwards through the history, measuring heights
+    // Scroll Buttons
+    int sbtn_w = _scroll_btn_w;
+    int sbtn_h = 32;
+    int sbtn_x = x + w - sbtn_w - 2;
+    drawButton(display, sbtn_x, hist_y, sbtn_w, sbtn_h, "^", false);
+    drawButton(display, sbtn_x, input_y - sbtn_h - 4, sbtn_w, sbtn_h, "v", false);
+
+    // Step 1: Collect
     const int MAX_VISIBLE_MSGS = 30;
     int msg_indices[MAX_VISIBLE_MSGS];
     int msg_heights[MAX_VISIBLE_MSGS];
     int num_matching = 0;
     int total_height = 0;
 
-    int text_x = x + 66;
-    int text_w = w - 70;
+    int bubble_max_w = w - sbtn_w - 20; // 20px padding from edges
+    if (bubble_max_w < 100) bubble_max_w = 100;
+    int text_max_w = bubble_max_w - 12; // padding inside bubble
 
-    // Scan messages to find which ones fit and their exact heights
     for (int i = 0; i < _task->getStoredMessageCount(); i++) {
       UITask::MessageEntry e;
-      // _chat_scroll indicates how many matching messages to skip from the newest
       int actual_idx = i;
       if (!_task->getStoredMessage(actual_idx, e)) break;
 
@@ -996,13 +1008,14 @@ private:
           continue;
         }
 
-        int h = measureTextWrapped(display, text_w, e.text);
+        int h = measureTextWrapped(display, text_max_w, e.text);
         int block_h = h > 14 ? h : 14;
+        block_h += 16; // Add space for sender name/tag above text
 
         msg_indices[num_matching] = actual_idx;
         msg_heights[num_matching] = block_h;
         num_matching++;
-        total_height += (block_h + 4);
+        total_height += (block_h + 6); // 6px gap between bubbles
 
         if (total_height > hist_h || num_matching >= MAX_VISIBLE_MSGS) {
           break;
@@ -1010,32 +1023,113 @@ private:
       }
     }
 
-    // Step 2: Draw the collected messages from bottom to top
+    // Step 2: Draw
     int current_y = message_bottom_y;
     for (int i = 0; i < num_matching; i++) {
       UITask::MessageEntry e;
       _task->getStoredMessage(msg_indices[i], e);
       int block_h = msg_heights[i];
 
-      current_y -= (block_h + 4);         // moving cursor UP
-      if (current_y < hist_y - 12) break; // sanity check against drawing over header
+      current_y -= (block_h + 6);
+      if (current_y < hist_y - 12) break;
 
       int ry = current_y;
 
-      // Draw sender info
-      if (e.is_sent) {
-        display.setColor(e.status == 1 ? DisplayDriver::GREEN : DisplayDriver::RED);
-        char tag[16];
-        snprintf(tag, sizeof(tag), " Me:%d", e.repeat_count);
-        display.drawTextEllipsized(x + 4, ry, 60, tag);
-      } else {
-        display.setColor(DisplayDriver::BLUE);
-        display.drawTextEllipsized(x + 4, ry, 60, e.origin);
+      // Parse out sender name if this is a group message with a prefix: "Name: Text"
+      const char *display_text = e.text;
+      char display_origin[32];
+      StrHelper::strzcpy(display_origin, e.origin, sizeof(display_origin));
+
+      if (e.is_group && !e.is_sent) {
+        const char *colon_pos = strchr(e.text, ':');
+        if (colon_pos != NULL && *(colon_pos + 1) == ' ') {
+          // Found a prefix! Extract it as the origin
+          int prefix_len = colon_pos - e.text;
+          if (prefix_len < sizeof(display_origin)) {
+            memcpy(display_origin, e.text, prefix_len);
+            display_origin[prefix_len] = '\0';
+            display_text = colon_pos + 2; // Skip ": "
+          }
+        }
       }
 
-      // Draw message body wrapped
+      int text_h = block_h - 16;
+      int bw = display.getTextWidth(display_origin);
+      if (e.is_sent) {
+        char tag[16];
+        snprintf(tag, sizeof(tag), "Me:%d", e.repeat_count);
+        bw = display.getTextWidth(tag);
+      }
+      if (bw > bubble_max_w - 12) bw = bubble_max_w - 12;
+
+      // Calculate minimum bubble width based on text
+      int raw_text_w = 0;
+      char word[64];
+      int word_len = 0;
+      int cw = 0;
+      int space_w = display.getTextWidth(" ");
+      for (int j = 0;; j++) {
+        char c = display_text[j];
+        if (c == ' ' || c == '\n' || c == '\0' || word_len >= 63) {
+          word[word_len] = '\0';
+          if (word_len > 0) {
+            int ww = display.getTextWidth(word);
+            if (cw + ww > text_max_w && cw > 0) {
+              if (cw > raw_text_w) raw_text_w = cw;
+              cw = ww + space_w;
+            } else {
+              cw += ww + space_w;
+            }
+            word_len = 0;
+          }
+          if (c == '\n') {
+            if (cw > raw_text_w) raw_text_w = cw;
+            cw = 0;
+          }
+          if (c == '\0') {
+            if (cw > raw_text_w) raw_text_w = cw;
+            break;
+          }
+        } else {
+          word[word_len++] = c;
+        }
+      }
+
+      int final_bw = (raw_text_w > bw) ? raw_text_w : bw;
+      final_bw += 12; // Add padding to minimum width
+
+      int bx, tx, name_x;
+      if (e.is_sent) {
+        // Right-aligned bubble
+        bx = x + w - sbtn_w - 6 - final_bw;
+        tx = bx + 6;
+        name_x = bx + final_bw - bw - 6;
+
+        display.setColor(DisplayDriver::DARK_GREY);
+        display.fillRoundRect(bx, ry, final_bw, block_h, 8);
+        // Border color indicates status
+        display.setColor(e.status == 1 ? DisplayDriver::GREEN : DisplayDriver::RED);
+        display.drawRoundRect(bx, ry, final_bw, block_h, 8);
+
+        char tag[16];
+        snprintf(tag, sizeof(tag), "Me:%d", e.repeat_count);
+        display.drawTextLeftAlign(name_x, ry + 4, tag);
+      } else {
+        // Left-aligned bubble
+        bx = x + 4;
+        tx = bx + 6;
+        name_x = bx + 6;
+
+        display.setColor(DisplayDriver::CHARCOAL);
+        display.fillRoundRect(bx, ry, final_bw, block_h, 8);
+        display.setColor(DisplayDriver::NEON_CYAN); // Incoming border
+        display.drawRoundRect(bx, ry, final_bw, block_h, 8);
+
+        display.drawTextEllipsized(name_x, ry + 4, final_bw - 12, display_origin);
+      }
+
       display.setColor(DisplayDriver::LIGHT);
-      drawTextWrapped(display, text_x, ry, text_w, e.text);
+      drawTextWrapped(display, tx, ry + 16, text_max_w, display_text);
     }
 
     if (_keyboard_visible) renderKeyboard(display);
@@ -1192,7 +1286,7 @@ private:
 
   void renderChatDropdown(DisplayDriver &display) {
     int dx = _content_x + 10;
-    int dy = _list_y + 26;
+    int dy = _status_bar_h + 30; // Move under new dropdown position
     int dw = _content_w - 20;
     int total_h = 135; // Enough for 5 items + header/footer
     display.setColor(DisplayDriver::DARK);
@@ -1856,8 +1950,10 @@ public:
             if (_active_chat_is_group) {
               ChannelDetails ch;
               if (the_mesh.getChannel(_active_chat_idx, ch)) {
+                uint32_t pkt_hash;
                 the_mesh.sendGroupMessage(_rtc->getCurrentTime(), ch.channel, _node_prefs->node_name,
-                                          _chat_draft, strlen(_chat_draft));
+                                          _chat_draft, strlen(_chat_draft), pkt_hash);
+                _task->storeMessage(0, ch.name, _chat_draft, _active_chat_idx, true, true, 0, pkt_hash);
                 // Use a simple sum-based checksum for repeat detection
                 expected_ack = 0;
                 for (int i = 0; _chat_draft[i]; i++)
@@ -1867,12 +1963,13 @@ public:
               ContactInfo ci;
               if (the_mesh.getContactByIdx(_active_chat_idx, ci)) {
                 uint32_t est_timeout;
-                the_mesh.sendMessage(ci, _rtc->getCurrentTime(), 0, _chat_draft, expected_ack, est_timeout);
+                uint32_t pkt_hash;
+                the_mesh.sendMessage(ci, _rtc->getCurrentTime(), 0, _chat_draft, expected_ack, est_timeout,
+                                     pkt_hash);
+                _task->storeMessage(0, ci.name, _chat_draft, _active_chat_idx, false, true, expected_ack,
+                                    pkt_hash);
               }
             }
-            // Store in local history too
-            _task->storeMessage(0, "Me", _chat_draft, _active_chat_idx, _active_chat_is_group, true,
-                                expected_ack);
             _chat_draft[0] = 0;
             _keyboard_visible = false;
           }
@@ -2095,7 +2192,7 @@ public:
       // Dropdown button - open dropdown OR handle taps if already open
       if (_chat_dropdown_open) {
         int dx = _content_x + 10;
-        int dy = _list_y + 26;
+        int dy = _status_bar_h + 30;
         int dw = _content_w - 20;
         int total_h = 135;
         int btn_area_w = 50;
@@ -2134,7 +2231,10 @@ public:
         return true;
       }
 
-      if (isInRect(x, y, _content_x + 4, _list_y + 4, _content_w - 8, 22)) {
+      // Check hit area for the dropdown button, using the updated coordinates
+      int expected_btn_w = (_screen_w > 200) ? 140 : 120;
+      int expected_btn_x = _screen_w - expected_btn_w - _scroll_btn_w - 6;
+      if (isInRect(x, y, expected_btn_x, _status_bar_h + 6, expected_btn_w, 22)) {
         _chat_dropdown_open = true;
         return true;
       }
@@ -2148,30 +2248,23 @@ public:
       }
 
       int total = _task->getStoredMessageCount();
-      int btn_x = _content_x + _content_w - _scroll_btn_w;
-      if (isInRect(x, y, btn_x, _scroll_up_y, _scroll_btn_w, _row_h)) {
-        if (_msg_cursor > 0) _msg_cursor--;
-        return true;
-      }
-      if (isInRect(x, y, btn_x, _scroll_down_y, _scroll_btn_w, _row_h)) {
-        if (_msg_cursor < total - 1) _msg_cursor++;
+      int btn_x = _content_x + _content_w - _scroll_btn_w - 2;
+      int hist_y = _list_y + 4;
+      int sbtn_h = 32;
+
+      // Scroll UP button
+      if (isInRect(x, y, btn_x, hist_y, _scroll_btn_w, sbtn_h)) {
+        if (_chat_scroll < total) _chat_scroll++;
         return true;
       }
 
-      if (y >= _list_y) {
-        int row = (y - _list_y) / _row_h;
-        if (row >= 0 && row < _list_rows) {
-          int list_w = _content_w - _scroll_btn_w - 4;
-          if (x < _content_x + list_w) {
-            int idx = _msg_scroll + row;
-            if (idx >= 0 && idx < total) {
-              _msg_cursor = idx;
-              _show_msg_detail = true;
-              return true;
-            }
-          }
-        }
+      // Scroll DOWN button
+      if (isInRect(x, y, btn_x, input_y - sbtn_h - 4, _scroll_btn_w, sbtn_h)) {
+        if (_chat_scroll > 0) _chat_scroll--;
+        return true;
       }
+
+      // Close keyboard or detail view if tapping outside bounds
       return true;
     }
 
@@ -2434,7 +2527,7 @@ void UITask::notify(UIEventType t) {
 }
 
 void UITask::storeMessage(uint8_t path_len, const char *from_name, const char *text, uint8_t channel_idx,
-                          bool is_group, bool is_sent, uint32_t ack_hash) {
+                          bool is_group, bool is_sent, uint32_t ack_hash, uint32_t repeat_id) {
   _messages_head = (_messages_head + 1) % MAX_STORED_MESSAGES;
   if (_messages_count < MAX_STORED_MESSAGES) _messages_count++;
 
@@ -2446,13 +2539,15 @@ void UITask::storeMessage(uint8_t path_len, const char *from_name, const char *t
   e.status = 0; // pending
   e.repeat_count = 0;
   e.ack_hash = ack_hash;
+  e.repeat_id = repeat_id;
   StrHelper::strzcpy(e.origin, from_name, sizeof(e.origin));
   StrHelper::strzcpy(e.text, text, sizeof(e.text));
 }
 
-void UITask::updateMessageAck(uint32_t ack_hash) {
+void UITask::updateMessageAck(uint32_t hash) {
   for (int i = 0; i < _messages_count; i++) {
-    if (_messages[i].ack_hash == ack_hash && _messages[i].is_sent) {
+    // try to match with either Ack hash or Packet hash (repeat_id)
+    if ((_messages[i].ack_hash == hash || _messages[i].repeat_id == hash) && _messages[i].is_sent) {
       _messages[i].status = 1; // Acked/Repeated
       _messages[i].repeat_count++;
       return;
