@@ -60,18 +60,23 @@ To get your Heltec V4 working with a 2.4" or 2.8" SPI TFT (ST7789) and Touch (XP
 4. **Backlight**: The code expects the backlight to be hardwired or managed. For Heltec V4, ensure your ground connections are solid to avoid flicker.
 
 ## 📱 Premium Tactical Touch UI
-The "TOUCH" edition features a high-performance, low-flicker UI designed for mission-critical reliability:
-- **3-Icon Carousel Navigation**: Fluent, touch-friendly carousel with large PREV/NEXT buttons for easy selection.
-- **Premium Aesthetics**: Rugged square app icons with 10px rounded borders and high-contrast "Neon Cyan" accents.
-- **Tactical Status Bar**: 
-  - **✉ Unread Messages**: Real-time counter for incoming channel and direct messages.
-  - **⛫ Node Discovery**: Dynamic counter showing active nodes heard in the mesh.
-  - **⚡ Power Intel**: Accurate battery percentage and voltage (V:x.xx) display.
-- **Instant Responsiveness**: Fixed touch-hang issues and optimized redraw logic for an "always-ready" interface.
-- **Full QWERTY Keyboard**: Compose and send encrypted messages directly on-screen.
-- **Auto-Dismiss Splash**: Startup splash screen automatically transitions to the launcher after 5 seconds.
-- **Power Efficiency**: Intelligent backlight management and optional manual-wake notifications to maximize battery life.
-- **Node Persistence**: Secure, on-board storage for node names and mesh preferences.
+The "TOUCH" edition features a custom-built, high-performance UI designed for a deep tactical aesthetic and mission-critical reliability:
+
+- **Tactical Icon Pack**: High-resolution, custom 64x64 RGB565 icons (gears, mesh networks, compasses, radios) replacing standard flat designs.
+- **Military-Industrial Aesthetic**: A cohesive color palette featuring Deep Tactical Black backgrounds, Warm Steel Grey frames, and High-Visibility Tactical Amber/Orange accents.
+- **3-Icon Carousel Navigation**: Fluent, touch-friendly carousel with prominent tiles. Functions include:
+  - **CLOCK**: Large, centered time display with date.
+  - **CHAT**: Read and send encrypted messages, view channel history, with an unread message indicator.
+  - **NODE**: Discover and track active mesh nodes dynamically with hop counts.
+  - **RADIO**: Access radio settings and hardware info.
+  - **CFG (Config)**: General device settings and preferences.
+  - **LOG**: View system logs and debug information.
+  - **BLE/LINK**: Manage Bluetooth connections and PIN pairing.
+  - **PWR**: Power menu and calibration.
+- **Ergonomic Touch Targets**: Enlarged Back buttons and intuitive overlays for easy finger tapping with gloves or in the field.
+- **Tactical Status Bar**: Real-time counters for unread messages (✉) and discovered nodes (⛫), plus accurate battery voltage intel.
+- **Full QWERTY Keyboard**: Compose messages directly on-screen with quick-toggle Shift/Number pads.
+- **Power Efficiency**: Intelligent backlight management, splash screen auto-dismiss, and optimized redraws.
 
 ---
 *Created by Quark1980 & The MeshCore Community*

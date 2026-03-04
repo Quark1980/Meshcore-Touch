@@ -148,6 +148,7 @@ static void drawTouchDebugDot(DisplayDriver &display) {
 
 #include "icons.h"
 #include "meshcore_logo_color.h"
+#include "tactical_assets.h"
 #include "touch_splash.h"
 
 // 16x16 tactical icons
@@ -403,6 +404,18 @@ private:
     return icon_settings_16;
   }
 
+  const uint16_t *tabIconColor(uint8_t i) {
+    if (i == TAB_HOME) return icon_clock_64;
+    if (i == TAB_CHAT) return icon_chat_64;
+    if (i == TAB_NODES) return icon_nodes_64;
+    if (i == TAB_GPS) return icon_radio_64;
+    if (i == TAB_CONFIG) return icon_settings_64;
+    if (i == TAB_LOG) return icon_log_64;
+    if (i == TAB_BLE) return icon_ble_64;
+    if (i == TAB_POWER) return icon_settings_64; // reuse settings for power
+    return icon_settings_64;
+  }
+
   const char *tabShortLabel(uint8_t i) {
     if (i == TAB_HOME) return "TIME";
     if (i == TAB_CHAT) return "CHAT";
@@ -519,12 +532,15 @@ private:
         display.fillRect(bx, by, 4, bh);
       }
     } else {
-      // DRAW BACK BUTTON OVER SIGNAL AREA
+      // DRAW BACK BUTTON OVER SIGNAL AREA (large for finger tapping)
       display.setColor(DisplayDriver::DARK_GREY);
-      display.fillRoundRect(2, 2, 34, _status_bar_h - 4, 4);
+      display.fillRoundRect(2, 2, 68, _status_bar_h - 4, 6);
       display.setColor(DisplayDriver::NEON_CYAN);
-      display.drawRoundRect(2, 2, 34, _status_bar_h - 4, 4);
-      display.drawTextCentered(19, _status_bar_h / 2 - 4, "<");
+      display.drawRoundRect(2, 2, 68, _status_bar_h - 4, 6);
+      display.setTextSize(2);
+      // Adjusted Y coordinate upwards (by 5px) to properly center the 16px tall text size 2
+      display.drawTextCentered(36, _status_bar_h / 2 - 7, "<");
+      display.setTextSize(1);
     }
 
     // 5. Battery Data (Compact with Voltage)
@@ -647,7 +663,8 @@ private:
       int tx = i * tw;
       // Highlight the middle one as "active" for fluent scroll feel
       bool active = (i == 1);
-      drawTile(display, tx + 4, start_y, tw - 8, icon_th, tabLabel(tab_idx), tabIcon((Tab)tab_idx), active);
+      drawTile(display, tx + 4, start_y, tw - 8, icon_th, tabLabel(tab_idx), tabIcon((Tab)tab_idx),
+               tabIconColor((Tab)tab_idx), active);
     }
 
     // Bottom Navigation Buttons (Wide Bars)
@@ -678,7 +695,7 @@ private:
   }
 
   void drawTile(DisplayDriver &display, int x, int y, int w, int h, const char *label, const uint8_t *icon,
-                bool active) {
+                const uint16_t *colorIcon, bool active) {
     // Rugged Tile Design
     display.setColor(DisplayDriver::CHARCOAL);
     display.fillRoundRect(x, y, w, h, 10);
@@ -692,11 +709,19 @@ private:
       display.drawRoundRect(x, y, w, h, 10);
     }
 
-    // Larger 32x32 Scaled Icon
-    int ix = x + (w / 2) - 16;
-    int iy = y + 15;
-    display.setColor(active ? DisplayDriver::NEON_CYAN : DisplayDriver::GREY);
-    drawScaledXbm2x(display, ix, iy, icon);
+    // Render high-res color icon if available, else XBM fallback
+    if (colorIcon) {
+      int icon_sz = 64;
+      int ix = x + (w - icon_sz) / 2;
+      int iy = y + 8;
+      display.drawRGBBitmap(ix, iy, colorIcon, icon_sz, icon_sz);
+    } else {
+      // Fallback: 32x32 Scaled XBM Icon
+      int ix = x + (w / 2) - 16;
+      int iy = y + 15;
+      display.setColor(active ? DisplayDriver::NEON_CYAN : DisplayDriver::GREY);
+      drawScaledXbm2x(display, ix, iy, icon);
+    }
 
     // Label with small spacing
     display.setTextSize(1);
@@ -1744,20 +1769,20 @@ public:
   bool handleTouch(int x, int y) override {
     // 0. Top Bar / Navigation
     if (y < _status_bar_h) {
-      // Back Button hit area (top-left)
-      if (!_is_dashboard && x < 40) {
+      // Back Button hit area (top-left, enlarged width)
+      if (!_is_dashboard && x < 75) {
         _is_dashboard = true;
         return true;
       }
       // Home Button hit area (Centered Clock in status bar)
-      if (x > _screen_w / 2 - 40 && x < _screen_w / 2 + 40) {
+      if (y < _status_bar_h && x > _screen_w / 2 - 40 && x < _screen_w / 2 + 40) {
         _is_dashboard = true;
         _show_msg_detail = false;
         _keyboard_visible = false;
         _num_input_visible = false;
         return true;
       }
-      return true; // Absorb touches in status bar
+      if (y < _status_bar_h) return true; // Absorb touches in status bar
     }
 
     // 1. Global Overlays: Keyboard, NumKeypad, Chat Dropdown
