@@ -25,7 +25,7 @@
 #define AUTO_OFF_MILLIS 15000 // 15 seconds
 #endif
 #define BOOT_SCREEN_MILLIS 3000 // 3 seconds
-#define TOUCH_UI_VERSION   "v1.2.2"
+#define TOUCH_UI_VERSION   "v1.2.3"
 
 #ifdef PIN_STATUS_LED
 #define LED_ON_MILLIS     20
@@ -1159,10 +1159,24 @@ private:
           int w = display.getTextWidth(word);
           if (current_w + w > max_w && current_w > 0) {
             lines++;
-            current_w = w + space_w;
-          } else {
-            current_w += w + space_w;
+            current_w = 0;
           }
+          // Handle words longer than max_w
+          while (display.getTextWidth(word) > max_w) {
+            int fit = 0;
+            char sub[64];
+            while (fit < (int)strlen(word) && fit < 63) {
+              sub[fit] = word[fit];
+              sub[fit + 1] = '\0';
+              if (display.getTextWidth(sub) > max_w) break;
+              fit++;
+            }
+            if (fit == 0) fit = 1;
+            lines++;
+            memmove(word, word + fit, strlen(word) - fit + 1);
+            current_w = 0;
+          }
+          current_w += display.getTextWidth(word) + space_w;
           word_len = 0;
         }
         if (c == '\n') {
@@ -1199,8 +1213,27 @@ private:
             y += 13;
             current_w = 0;
           }
+
+          // Handle words longer than max_w
+          while (display.getTextWidth(word) > max_w) {
+            int fit = 0;
+            char sub[64];
+            while (fit < (int)strlen(word) && fit < 63) {
+              sub[fit] = word[fit];
+              sub[fit + 1] = '\0';
+              if (display.getTextWidth(sub) > max_w) break;
+              fit++;
+            }
+            if (fit == 0) fit = 1;
+            sub[fit] = '\0';
+            display.drawTextLeftAlign(x, y, sub);
+            y += 13;
+            memmove(word, word + fit, strlen(word) - fit + 1);
+            current_w = 0;
+          }
+
           display.drawTextLeftAlign(x + current_w, y, word);
-          current_w += w + space_w;
+          current_w += display.getTextWidth(word) + space_w;
           word_len = 0;
         }
         if (c == '\n') {
