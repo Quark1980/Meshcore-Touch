@@ -316,6 +316,9 @@ private:
   bool _msg_unread = false;
   bool _chat_unread = false;
 
+  char _last_kb_key = 0;           // For visual feedback
+  uint32_t _kb_feedback_until = 0; // Duration of feedback highlight
+
   UITask *_task;
   mesh::RTCClock *_rtc;
   SensorManager *_sensors;
@@ -1264,7 +1267,7 @@ public:
 
   void renderKeyboard(DisplayDriver &display) {
     int kb_h = 160;
-    int kb_y = _screen_h - kb_h;
+    int kb_y = (_screen_h - kb_h) / 2; // Centered vertically
     display.setColor(DisplayDriver::DARK);
     display.fillRect(0, kb_y, _screen_w, kb_h);
     display.setColor(DisplayDriver::SLATE_GREY);
@@ -1300,14 +1303,17 @@ public:
 
     int ky = kb_y + 36;
     int kw = _screen_w / 10;
-    int kh = 26;
+    int kh = 30; // Increased from 26
+
+    bool feedback_active = (millis() < _kb_feedback_until);
 
     for (int r = 0; r < 3; r++) {
       int len = strlen(rows[r]);
       int ox = (_screen_w - (len * kw)) / 2;
       for (int c = 0; c < len; c++) {
         char key[2] = { rows[r][c], 0 };
-        drawKey(display, ox + c * kw, ky + r * (kh + 4), kw - 2, kh, key);
+        bool is_pressed = feedback_active && (_last_kb_key == key[0]);
+        drawKey(display, ox + c * kw, ky + r * (kh + 4), kw - 2, kh, key, is_pressed);
       }
     }
 
@@ -1315,24 +1321,33 @@ public:
     int bottom_y = ky + 3 * (kh + 4);
     // Case toggle (ABC/abc) - Only relevant if not in symbols mode
     const char *case_label = (_kb_shift == 1) ? "abc" : "ABC";
-    drawKey(display, 4, bottom_y, 36, kh, case_label);
+    bool case_pressed = feedback_active && (_last_kb_key == 1); // 1 = special code for SHIFT
+    drawKey(display, 4, bottom_y, 40, kh, case_label, case_pressed);
 
     // Mode toggle (123 / ABC)
     const char *mode_label = (_kb_shift == 2) ? "ABC" : "123";
-    drawKey(display, 45, bottom_y, 36, kh, mode_label);
+    bool mode_pressed = feedback_active && (_last_kb_key == 2); // 2 = special code for MODE
+    drawKey(display, 49, bottom_y, 40, kh, mode_label, mode_pressed);
 
-    drawKey(display, 86, bottom_y, 98, kh, "SPACE");
-    drawKey(display, 190, bottom_y, 55, kh, "BKSP");
-    drawKey(display, 250, bottom_y, 65, kh, "SEND");
+    bool space_pressed = feedback_active && (_last_kb_key == ' ');
+    drawKey(display, 94, bottom_y, 100, kh, "SPACE", space_pressed);
+
+    bool bksp_pressed = feedback_active && (_last_kb_key == 8); // 8 = backspace
+    drawKey(display, 199, bottom_y, 55, kh, "BKSP", bksp_pressed);
+
+    bool send_pressed = feedback_active && (_last_kb_key == 13); // 13 = enter
+    drawKey(display, 259, bottom_y, 57, kh, "SEND", send_pressed);
   }
 
-  void drawKey(DisplayDriver &display, int x, int y, int w, int h, const char *label) {
-    display.setColor(DisplayDriver::DARK);
-    display.fillRoundRect(x, y, w, h, 2);
-    display.setColor(DisplayDriver::SLATE_GREY);
-    display.drawRoundRect(x, y, w, h, 2); // Cyber-tech: Always use slate grey for inactive keys
-    display.setColor(DisplayDriver::LIGHT);
-    display.drawTextCentered(x + w / 2, y + (h - 12) / 2, label);
+  void drawKey(DisplayDriver &display, int x, int y, int w, int h, const char *label, bool pressed = false) {
+    display.setColor(pressed ? DisplayDriver::ORANGE : DisplayDriver::DARK);
+    display.fillRoundRect(x, y, w, h, 6); // More rounded look (increased from 2)
+    display.setColor(pressed ? DisplayDriver::ORANGE : DisplayDriver::SLATE_GREY);
+    display.drawRoundRect(x, y, w, h, 6);
+    display.setColor(pressed ? DisplayDriver::DARK : DisplayDriver::LIGHT); // High contrast text when pressed
+    display.setTextSize(2);                                                 // Increased text size
+    display.drawTextCentered(x + w / 2, y + (h - 14) / 2, label);
+    display.setTextSize(1);
   }
 
   void renderRadio(DisplayDriver &display) {
@@ -1641,7 +1656,7 @@ public:
         _settings_cursor(0), _settings_scroll(0), _active_chat_idx(0), _active_chat_is_group(true),
         _keyboard_visible(false), _kb_shift(0), _chat_scroll(0), _radio_raw_mode(false),
         _editing_node_name(false), _power_armed(false), _power_armed_until(0), _msg_unread(false),
-        _chat_unread(false), _num_input_visible(false) {
+        _chat_unread(false), _num_input_visible(false), _last_kb_key(0), _kb_feedback_until(0) {
     _chat_draft[0] = 0;
     _num_input_buf[0] = 0;
     _num_input_title = "";
@@ -1906,32 +1921,38 @@ public:
     // 1. Global Overlays: Keyboard, NumKeypad, Chat Dropdown
     if (_keyboard_visible) {
       int kb_h = 160;
-      int kb_y = _screen_h - kb_h;
-      if (y >= kb_y) {
+      int kb_y = (_screen_h - kb_h) / 2; // Match centered position
+      if (y >= kb_y && y < kb_y + kb_h) {
         int ky = kb_y + 36;
-        int kh = 26;
+        int kh = 30;
         int kw = _screen_w / 10;
 
-        // Check special keys first (bottom row)
+        // Special keys hit detection (updated for larger buttons)
         int bottom_y = ky + 3 * (kh + 4);
-        // Case toggle (ABC/abc) at (4, bottom_y, 36, kh)
-        if (isInRect(x, y, 4, bottom_y, 36, kh)) {
+        // Case toggle (ABC/abc) at (4, bottom_y, 40, kh)
+        if (isInRect(x, y, 4, bottom_y, 40, kh)) {
+          _last_kb_key = 1; // SHIFT
+          _kb_feedback_until = millis() + 150;
           if (_kb_shift == 2)
-            _kb_shift = 1; // From numbers to uppercase
+            _kb_shift = 1;
           else
-            _kb_shift = (_kb_shift == 1) ? 0 : 1; // Toggle between lower and upper
+            _kb_shift = (_kb_shift == 1) ? 0 : 1;
           return true;
         }
-        // Mode toggle (123/ABC) at (45, bottom_y, 36, kh)
-        if (isInRect(x, y, 45, bottom_y, 36, kh)) {
+        // Mode toggle (123/ABC) at (49, bottom_y, 40, kh)
+        if (isInRect(x, y, 49, bottom_y, 40, kh)) {
+          _last_kb_key = 2; // MODE
+          _kb_feedback_until = millis() + 150;
           if (_kb_shift == 2)
-            _kb_shift = 0; // Back to letters
+            _kb_shift = 0;
           else
-            _kb_shift = 2; // Switch to numbers
+            _kb_shift = 2;
           return true;
         }
-        // Space bar at (86, bottom_y, 98, kh)
-        if (isInRect(x, y, 86, bottom_y, 98, kh)) {
+        // Space bar at (94, bottom_y, 100, kh)
+        if (isInRect(x, y, 94, bottom_y, 100, kh)) {
+          _last_kb_key = ' ';
+          _kb_feedback_until = millis() + 150;
           int len = strlen(_chat_draft);
           if (len < sizeof(_chat_draft) - 1) {
             _chat_draft[len] = ' ';
@@ -1939,13 +1960,18 @@ public:
           }
           return true;
         }
-        // Backspace at (190, bottom_y, 55, kh)
-        if (isInRect(x, y, 190, bottom_y, 55, kh)) {
+        // Backspace at (199, bottom_y, 55, kh)
+        if (isInRect(x, y, 199, bottom_y, 55, kh)) {
+          _last_kb_key = 8; // BKSP
+          _kb_feedback_until = millis() + 150;
           int len = strlen(_chat_draft);
           if (len > 0) _chat_draft[len - 1] = 0;
           return true;
         }
-        if (isInRect(x, y, 250, bottom_y, 65, kh)) {
+        // SEND at (259, bottom_y, 57, kh)
+        if (isInRect(x, y, 259, bottom_y, 57, kh)) {
+          _last_kb_key = 13; // SEND
+          _kb_feedback_until = millis() + 150;
           // SEND / OK
           if (_editing_node_name) {
             StrHelper::strzcpy(_node_prefs->node_name, _chat_draft, sizeof(_node_prefs->node_name));
@@ -2009,9 +2035,12 @@ public:
             int ox = (_screen_w - (len * kw)) / 2;
             if (x >= ox && x < ox + len * kw) {
               int c_idx = (x - ox) / kw;
+              char tapped_char = krows[r][c_idx];
+              _last_kb_key = tapped_char;
+              _kb_feedback_until = millis() + 150;
               int d_len = strlen(_chat_draft);
               if (d_len < sizeof(_chat_draft) - 1) {
-                _chat_draft[d_len] = krows[r][c_idx];
+                _chat_draft[d_len] = tapped_char;
                 _chat_draft[d_len + 1] = 0;
               }
               return true;
