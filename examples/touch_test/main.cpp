@@ -1,5 +1,9 @@
+#include "grid_chat.h"
+#include "grid_launcher.h"
+
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <WiFi.h>
 #include <Wire.h>
 #include <lvgl.h>
 
@@ -13,6 +17,7 @@
 #define DRAW_BUF_SIZE (480 * 320 / 10 * (LV_COLOR_DEPTH / 8))
 
 TFT_eSPI tft = TFT_eSPI();
+lv_obj_t *g_touch_dot = nullptr; // global touch dot indicator
 
 /*====================
  * LVGL DISPLAY DRIVER
@@ -38,23 +43,29 @@ void my_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
   static int16_t last_y = 0;
   bool is_pressed = false;
 
-  if (digitalRead(TOUCH_INT) == LOW) {
-    Wire.beginTransmission(FT6336U_ADDR);
-    Wire.write(0x02); // TD_STATUS register
-    if (Wire.endTransmission() == 0) {
-      Wire.requestFrom((uint16_t)FT6336U_ADDR, (uint8_t)5, true);
-      if (Wire.available() >= 5) {
-        uint8_t touches = Wire.read() & 0x0F;
-        uint8_t x_high = Wire.read();
-        uint8_t x_low = Wire.read();
-        uint8_t y_high = Wire.read();
-        uint8_t y_low = Wire.read();
+  // Poll I2C status register directly (more reliable than INT pin during debug)
+  Wire.beginTransmission(FT6336U_ADDR);
+  Wire.write(0x02); // TD_STATUS register
+  if (Wire.endTransmission() == 0) {
+    Wire.requestFrom((uint16_t)FT6336U_ADDR, (uint8_t)5, true);
+    if (Wire.available() >= 5) {
+      uint8_t touches = Wire.read() & 0x0F;
+      uint8_t x_high = Wire.read();
+      uint8_t x_low = Wire.read();
+      uint8_t y_high = Wire.read();
+      uint8_t y_low = Wire.read();
 
-        if (touches > 0) {
-          last_x = ((x_high & 0x0F) << 8) | x_low;
-          last_y = ((y_high & 0x0F) << 8) | y_low;
-          is_pressed = true;
-        }
+      if (touches > 0) {
+        // FT6336U raw coordinates
+        int16_t raw_x = ((x_high & 0x0F) << 8) | x_low;
+        int16_t raw_y = ((y_high & 0x0F) << 8) | y_low;
+
+        // Map raw coordinates to screen orientation
+        // Since Rotation 0 is now correct, we use raw values or basic scaling if needed.
+        last_x = raw_x;
+        last_y = raw_y;
+
+        is_pressed = true;
       }
     }
   }
@@ -63,6 +74,9 @@ void my_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = last_x;
     data->point.y = last_y;
+    if (g_touch_dot) {
+      lv_obj_set_pos(g_touch_dot, last_x - 10, last_y - 10);
+    }
   } else {
     data->state = LV_INDEV_STATE_RELEASED;
   }
@@ -103,6 +117,7 @@ void setup() {
 
   pinMode(TOUCH_INT, INPUT);
   Wire.begin(TOUCH_SDA, TOUCH_SCL);
+  Wire.setClock(400000); // Fast I2C for touch responsive
 
   // PWM for Backlight
   ledcSetup(0, 5000, 8);
@@ -112,8 +127,8 @@ void setup() {
 
   // Initialize TFT
   tft.init();
-  tft.setRotation(0);
-  Serial.println("TFT init OK");
+  tft.setRotation(0); // Flip 180 from Rotation 2
+  Serial.println("TFT init OK (Rotation 0)");
 
   // Initialize LVGL Core
   lv_init();
@@ -148,30 +163,14 @@ void setup() {
   ms_tick = millis();
   xTaskCreatePinnedToCore(lvgl_tick_task, "lvgl_tick", 4096, NULL, 1, NULL, 1);
 
-  // Create a Simple Test Screen
-  lv_obj_t *label = lv_label_create(lv_screen_active());
-  lv_label_set_text(label, "GRID v2 LVGL v9 TEST\nTouch me!");
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-
-  lv_obj_t *btn = lv_button_create(lv_screen_active());
-  lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -50);
-
-  lv_obj_t *btn_label = lv_label_create(btn);
-  lv_label_set_text(btn_label, "Click me!");
-
-  lv_obj_add_event_cb(
-      btn,
-      [](lv_event_t *e) {
-        lv_obj_t *lbl = (lv_obj_t *)lv_event_get_user_data(e);
-        lv_label_set_text(lbl, "Button Pressed!");
-      },
-      LV_EVENT_CLICKED, label);
-
-  Serial.println("Screen geladen");
+  // Initialize GRID Launcher
+  launcher_init();
+  Serial.println("GRID Launcher geladen");
 }
 
 void loop() {
   // Let LVGL process UI updates
   lv_timer_handler();
+  launcher_update();
   delay(5);
 }
